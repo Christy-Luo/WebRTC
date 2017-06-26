@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+    <script src="https://cdn.bootcss.com/jquery/1.12.4/jquery.js"></script>
+    <script src="https://cdn.bootcss.com/EventEmitter/5.1.0/EventEmitter.min.js"></script>
+    <!-- Compiled and minified CSS -->
+    <link href="https://cdn.bootcss.com/materialize/0.97.7/css/materialize.min.css" rel="stylesheet">
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdn.bootcss.com/materialize/0.97.7/js/materialize.min.js"></script>
+
+    <script src="https://cdn1.lncld.net/static/js/av-min-1.2.1.js"></script>
+    <script src="/javascripts/realtime.browser.min.js"></script>
+    <script src="https://cdn.bootcss.com/vue/1.0.26/vue.min.js"></script>
+    <link href="/stylesheets/material_icon.css" rel="stylesheet">
+    <script src="/javascripts/adapter-1.0.2.js"></script>
+    <script src="/javascripts/main.js"></script>
+    <style>
+        html, body {
+            height: 100%;
+        }
+
+
+    </style>
+
+</head>
+<body id="main">
+<div id="page_main" v-if="now_page == 'page_main' " class="had-container">
+    <style>
+        #page_main {
+            display: flex;
+            justify-content: center;
+            flex-direction: column;
+            align-items: stretch;
+            height: 100%;
+            flex-wrap: wrap;
+
+        }
+
+    </style>
+    <div style="padding:15px;">
+        <div class="row">
+            <input placeholder="新房间名" v-model="newRoomName" class="col s9" id="new_room_name" type="text">
+            <a class="waves-effect waves-light btn col s3" @click="createRoom(newRoomName)">创建房间</a>
+        </div>
+
+    </div>
+    <div class="collection with-header" style="margin: 15px;">
+        <div class="collection-header teal-text text-darken-2"><h4>房间列表</h4></div>
+        <a href="#!" class="collection-item" v-for="r in rooms" @click="joinRoom(r)"> {{r.name}}<span class="new badge"
+                                                                                                      data-badge-caption="人">{{r.number}}</span></a>
+    </div>
+</div>
+
+
+<div id="page_room" v-if="now_page == 'page_room' " style="">
+    <style>
+        #page_room {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: 100%;
+            flex-wrap: wrap;
+
+        }
+
+    </style>
+
+    <div class="card" style="width:30%">
+        <div class="card-image">
+            <video v-if=" room" style="width: 100%" autoplay
+                   v-bind:src="getStreamUrl(getLocalStream())"></video>
+        </div>
+        <div class="card-content">
+            本地用户
+        </div>
+        <div class="card-action">
+            <a href="#">{{room.name}}</a>
+        </div>
+    </div>
+
+    <div v-for="client in clients" class="card" style="width:30%">
+        <div class="card-image">
+            <video style="width: 100%" autoplay
+                   v-bind:src="getStreamUrl(client.stream)"></video>
+        </div>
+        <div class="card-content">
+            {{client.id}}
+        </div>
+        <div class="card-action">
+            <a href="#">{{client.status}}</a>
+        </div>
+    </div>
+
+
+</div>
+<div class="fixed-action-btn horizontal" v-if="now_page == 'page_room' " style="bottom: 45px; right: 24px;">
+    <a class="btn-floating btn-large red">
+        <i class="large material-icons">view_list</i>
+    </a>
+    <ul>
+        <li @click="quitRoom"><a class="btn-floating red"><i class="material-icons">power_settings_new</i></a></li>
+
+    </ul>
+</div>
+
+<script>
+
+    var ins = new Vue({
+        el: "#main",
+        data: {
+            rooms: {},
+            room: null,
+            newRoomName: "",
+            clients: clients,
+            now_page: "page_main"
+        },
+        methods: {
+            createRoom: function (name) {
+                var $this = this;
+                mainThread.then(function () {
+                    return messageServer.createRoom(name);
+                }).then(function (room) {
+                    $this.$set("room", room);
+                    $this.$set("now_page", "page_room");
+                })
+            },
+            quitRoom: function () {
+                var $this = this;
+                mainThread.then(function () {
+                    return messageServer.sendRoomMessage({action: "quit"})
+                }).then(function () {
+                    messageServer.quitRoom();
+                    $this.$set("room", null);
+                    for (var clientId in $this.clients) {
+                        utils.removeClient(clients[clientId]);
+                    }
+                    $this.$set("now_page", "page_main");
+
+                })
+            },
+            joinRoom: function (room) {
+                var $this = this;
+                messageServer.joinRoom(room).then(function (room) {
+                    messageServer.sendRoomMessage({
+                        action: "join"
+                    })
+                    $this.$set("room", room);
+                    $this.$set("now_page", "page_room");
+                })
+            },
+            getStreamUrl: function (stream) {
+                if (!stream) return "";
+                return URL.createObjectURL(stream);
+            },
+            getLocalStream: function () {
+                return localStream;
+            }
+        },
+        ready: function () {
+            var $this = this;
+            //循环每5秒 获取一下房间列表
+            mainThread.then(function(){
+                var getRooms = function() {
+                    messageServer.getRooms().then(function(rooms){
+                        $this.$set("rooms", rooms);
+                    })
+                };
+                getRooms();
+                setInterval(function () {
+                    getRooms();
+                }, 5000)
+            });
+
+        }
+    });
+</script>
+</body>
+</html>
